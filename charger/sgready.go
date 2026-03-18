@@ -19,7 +19,6 @@ package charger
 
 import (
 	"context"
-	"errors"
 
 	"github.com/evcc-io/evcc/api"
 	"github.com/evcc-io/evcc/charger/measurement"
@@ -52,10 +51,10 @@ const (
 	Boost        // 3
 )
 
-//go:generate go tool decorate -f decorateSgReady -b *SgReady -r api.Charger -t "api.Meter,CurrentPower,func() (float64, error)" -t "api.MeterEnergy,TotalEnergy,func() (float64, error)" -t "api.Battery,Soc,func() (float64, error)" -t "api.SocLimiter,GetLimitSoc,func() (int64, error)"
+//go:generate go tool decorate -f decorateSgReady -b *SgReady -r api.Charger -t api.Meter,api.MeterEnergy,api.Battery,api.SocLimiter
 
 // NewSgReadyFromConfig creates an SG Ready configurable charger from generic config
-func NewSgReadyFromConfig(ctx context.Context, other map[string]interface{}) (api.Charger, error) {
+func NewSgReadyFromConfig(ctx context.Context, other map[string]any) (api.Charger, error) {
 	cc := struct {
 		embed                   `mapstructure:",squash"`
 		SetMode                 plugin.Config
@@ -66,7 +65,7 @@ func NewSgReadyFromConfig(ctx context.Context, other map[string]interface{}) (ap
 	}{
 		embed: embed{
 			Icon_:     "heatpump",
-			Features_: []api.Feature{api.Heating, api.IntegratedDevice},
+			Features_: []api.Feature{api.Continuous, api.Heating, api.IntegratedDevice},
 		},
 	}
 
@@ -74,9 +73,23 @@ func NewSgReadyFromConfig(ctx context.Context, other map[string]interface{}) (ap
 		return nil, err
 	}
 
-	modeS, err := cc.SetMode.IntSetter(ctx, "mode")
+	modeSet, err := cc.SetMode.IntSetter(ctx, "mode")
 	if err != nil {
 		return nil, err
+	}
+
+	log := util.ContextLoggerWithDefault(ctx, util.NewLogger("sgready"))
+
+	modeS := func(mode int64) error {
+		switch mode {
+		case Dim:
+			log.DEBUG.Printf("set sgready mode: %s", "dim")
+		case Normal:
+			log.DEBUG.Printf("set sgready mode: %s", "normal")
+		case Boost:
+			log.DEBUG.Printf("set sgready mode: %s", "boost")
+		}
+		return modeSet(mode)
 	}
 
 	modeG, err := cc.GetMode.IntGetter(ctx)
@@ -134,11 +147,11 @@ func (wb *SgReady) Status() (api.ChargeStatus, error) {
 		return api.StatusNone, err
 	}
 
-	if mode == Dim {
-		return api.StatusNone, errors.New("dim mode")
+	status := map[int64]api.ChargeStatus{
+		Dim:    api.StatusB,
+		Normal: api.StatusB,
+		Boost:  api.StatusC,
 	}
-
-	status := map[int64]api.ChargeStatus{Boost: api.StatusC, Normal: api.StatusB}
 	return status[mode], nil
 }
 

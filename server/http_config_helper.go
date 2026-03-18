@@ -26,7 +26,9 @@ const (
 	masked       = "***"      // masked indicates a masked config parameter value
 )
 
-var customTypes = []string{"custom", "template", "heatpump", "switchsocket", "sgready", "sgready-boost"}
+var (
+	customTypes = []string{"custom", "template", "heatpump", "switchsocket", "sgready", "sgready-relay"}
+)
 
 type configReq struct {
 	config.Properties `json:",inline" mapstructure:",squash"`
@@ -105,42 +107,66 @@ func templateForConfig(class templates.Class, conf map[string]any) (templates.Te
 	return templates.ByName(class, typ)
 }
 
-func sanitizeMasked(class templates.Class, conf map[string]any) (map[string]any, error) {
-	tmpl, err := templateForConfig(class, conf)
-	if err != nil {
-		return nil, err
-	}
+func filterValidTemplateParams(tmpl *templates.Template, conf map[string]any) map[string]any {
+	res := make(map[string]any)
 
-	res := make(map[string]any, len(conf))
+	// check if template has modbus capability
+	hasModbus := len(tmpl.ModbusChoices()) > 0
 
 	for k, v := range conf {
-		if i, p := tmpl.ParamByName(k); i >= 0 && p.IsMasked() {
-			v = masked
+		if k == "template" {
+			res[k] = v
+			continue
 		}
 
-		res[k] = v
+		// preserve modbus fields if template supports modbus
+		if hasModbus && slices.Contains(templates.ModbusParams, k) {
+			res[k] = v
+			continue
+		}
+
+		if i, _ := tmpl.ParamByName(k); i >= 0 {
+			res[k] = v
+		}
 	}
 
-	return res, nil
+	return res
 }
 
-func mergeMasked(class templates.Class, conf, old map[string]any) (map[string]any, error) {
+// mapTemplateConfig applies a mapping function to device configuration based on template parameters
+func mapTemplateConfig(class templates.Class, conf map[string]any, fun func(p templates.Param, k string, v any) any) (map[string]any, error) {
 	tmpl, err := templateForConfig(class, conf)
 	if err != nil {
 		return nil, err
 	}
 
-	res := make(map[string]any, len(conf))
-
-	for k, v := range conf {
-		if i, p := tmpl.ParamByName(k); i >= 0 && p.IsMasked() && v == masked {
-			v = old[k]
+	return filterValidTemplateParams(&tmpl, lo.MapValues(conf, func(val any, key string) any {
+		if i, p := tmpl.ParamByName(key); i >= 0 {
+			val = fun(p, key, val)
 		}
 
-		res[k] = v
-	}
+		return val
+	})), nil
+}
 
-	return res, nil
+// sanitizeMasked replaces masked and private configuration properties with the `***` placeholder
+func sanitizeMasked(class templates.Class, conf map[string]any, hidePrivate bool) (map[string]any, error) {
+	return mapTemplateConfig(class, conf, func(p templates.Param, _ string, v any) any {
+		if p.IsMasked() || hidePrivate && p.IsPrivate() {
+			return masked
+		}
+		return v
+	})
+}
+
+// mergeMasked replaces masked `***` configuration properties with their actual values
+func mergeMasked(class templates.Class, conf, old map[string]any) (map[string]any, error) {
+	return mapTemplateConfig(class, conf, func(p templates.Param, k string, v any) any {
+		if p.IsMasked() && v == masked {
+			return old[k]
+		}
+		return v
+	})
 }
 
 func startDeviceTimeout() (context.Context, context.CancelFunc, chan struct{}) {
@@ -309,9 +335,45 @@ func testInstance(instance any) map[string]testResult {
 		makeResult(key, val, err)
 	}
 
+	if dev, ok := instance.(api.Dimmer); ok {
+		val, err := dev.Dimmed()
+		makeResult("dimmed", val, err)
+	}
+
 	if dev, ok := instance.(api.Identifier); ok {
 		val, err := dev.Identify()
 		makeResult("identifier", val, err)
+	}
+
+	if dev, ok := instance.(api.Tariff); ok {
+		rates, err := dev.Rates()
+
+		// Determine field names based on tariff type
+		var valueKey, ratesKey string
+		switch dev.Type() {
+		case api.TariffTypePriceDynamic, api.TariffTypePriceForecast:
+			valueKey = "price"
+			ratesKey = "priceRates"
+		case api.TariffTypeCo2:
+			valueKey = "co2"
+			ratesKey = "co2Rates"
+		case api.TariffTypeSolar:
+			valueKey = "power"
+			ratesKey = "solarRates"
+		default:
+			valueKey = "price"
+		}
+
+		if err == nil && len(rates) > 0 {
+			// Get current rate value
+			if rate, err := rates.At(time.Now()); err == nil {
+				makeResult(valueKey, rate.Value, nil)
+			}
+
+			if ratesKey != "" {
+				makeResult(ratesKey, rates, nil)
+			}
+		}
 	}
 
 	return res

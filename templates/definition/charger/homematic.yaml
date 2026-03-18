@@ -21,10 +21,7 @@ params:
       en: Homematic device id like shown in the CCU web user interface.
       de: Homematic Geräte Id, wie im CCU Webfrontend angezeigt.
   - name: user
-    required: false
   - name: password
-    required: false
-    mask: true
   - name: meterchannel
     default: 6
     type: int
@@ -63,15 +60,9 @@ render: |
   type: homematic
   uri: {{ .host }}:{{ .port }}
   device: {{ .device }}
-  {{- if .user }}
   user: {{ .user }}
-  {{- end }}
-  {{- if .password }}
   password: {{ .password }}
-  {{- end }}
   meterchannel: {{ .meterchannel }}
   switchchannel: {{ .switchchannel }}
   {{ include "switchsocket" . }}
-  {{- if .cache }}
   cache: {{ .cache }}
-  {{- end }}

@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _FeatureName = "CoarseCurrentIntegratedDeviceHeatingCacheableOfflineRetryableWelcomeCharge"
+const _FeatureName = "CoarseCurrentIntegratedDeviceHeatingContinuousAverageCacheableOfflineRetryableStreamingWelcomeCharge"
 
-var _FeatureIndex = [...]uint8{0, 13, 29, 36, 45, 52, 61, 74}
+var _FeatureIndex = [...]uint8{0, 13, 29, 36, 46, 53, 62, 69, 78, 87, 100}
 
-const _FeatureLowerName = "coarsecurrentintegrateddeviceheatingcacheableofflineretryablewelcomecharge"
+const _FeatureLowerName = "coarsecurrentintegrateddeviceheatingcontinuousaveragecacheableofflineretryablestreamingwelcomecharge"
 
 func (i Feature) String() string {
 	i -= 1
@@ -28,39 +28,51 @@ func _FeatureNoOp() {
 	_ = x[CoarseCurrent-(1)]
 	_ = x[IntegratedDevice-(2)]
 	_ = x[Heating-(3)]
-	_ = x[Cacheable-(4)]
-	_ = x[Offline-(5)]
-	_ = x[Retryable-(6)]
-	_ = x[WelcomeCharge-(7)]
+	_ = x[Continuous-(4)]
+	_ = x[Average-(5)]
+	_ = x[Cacheable-(6)]
+	_ = x[Offline-(7)]
+	_ = x[Retryable-(8)]
+	_ = x[Streaming-(9)]
+	_ = x[WelcomeCharge-(10)]
 }
 
-var _FeatureValues = []Feature{CoarseCurrent, IntegratedDevice, Heating, Cacheable, Offline, Retryable, WelcomeCharge}
+var _FeatureValues = []Feature{CoarseCurrent, IntegratedDevice, Heating, Continuous, Average, Cacheable, Offline, Retryable, Streaming, WelcomeCharge}
 
 var _FeatureNameToValueMap = map[string]Feature{
-	_FeatureName[0:13]:       CoarseCurrent,
-	_FeatureLowerName[0:13]:  CoarseCurrent,
-	_FeatureName[13:29]:      IntegratedDevice,
-	_FeatureLowerName[13:29]: IntegratedDevice,
-	_FeatureName[29:36]:      Heating,
-	_FeatureLowerName[29:36]: Heating,
-	_FeatureName[36:45]:      Cacheable,
-	_FeatureLowerName[36:45]: Cacheable,
-	_FeatureName[45:52]:      Offline,
-	_FeatureLowerName[45:52]: Offline,
-	_FeatureName[52:61]:      Retryable,
-	_FeatureLowerName[52:61]: Retryable,
-	_FeatureName[61:74]:      WelcomeCharge,
-	_FeatureLowerName[61:74]: WelcomeCharge,
+	_FeatureName[0:13]:        CoarseCurrent,
+	_FeatureLowerName[0:13]:   CoarseCurrent,
+	_FeatureName[13:29]:       IntegratedDevice,
+	_FeatureLowerName[13:29]:  IntegratedDevice,
+	_FeatureName[29:36]:       Heating,
+	_FeatureLowerName[29:36]:  Heating,
+	_FeatureName[36:46]:       Continuous,
+	_FeatureLowerName[36:46]:  Continuous,
+	_FeatureName[46:53]:       Average,
+	_FeatureLowerName[46:53]:  Average,
+	_FeatureName[53:62]:       Cacheable,
+	_FeatureLowerName[53:62]:  Cacheable,
+	_FeatureName[62:69]:       Offline,
+	_FeatureLowerName[62:69]:  Offline,
+	_FeatureName[69:78]:       Retryable,
+	_FeatureLowerName[69:78]:  Retryable,
+	_FeatureName[78:87]:       Streaming,
+	_FeatureLowerName[78:87]:  Streaming,
+	_FeatureName[87:100]:      WelcomeCharge,
+	_FeatureLowerName[87:100]: WelcomeCharge,
 }
 
 var _FeatureNames = []string{
 	_FeatureName[0:13],
 	_FeatureName[13:29],
 	_FeatureName[29:36],
-	_FeatureName[36:45],
-	_FeatureName[45:52],
-	_FeatureName[52:61],
-	_FeatureName[61:74],
+	_FeatureName[36:46],
+	_FeatureName[46:53],
+	_FeatureName[53:62],
+	_FeatureName[62:69],
+	_FeatureName[69:78],
+	_FeatureName[78:87],
+	_FeatureName[87:100],
 }
 
 // FeatureString retrieves an enum value from the enum constants string name.

@@ -30,7 +30,7 @@ func bo() backoff.BackOff {
 
 // backoffPermanentError returns a permanent error in case of HTTP 400
 func backoffPermanentError(err error) error {
-	if se := new(request.StatusError); errors.As(err, &se) {
+	if se, ok := errors.AsType[*request.StatusError](err); ok {
 		if code := se.StatusCode(); code >= 400 && code <= 599 {
 			return backoff.Permanent(se)
 		}
@@ -48,6 +48,8 @@ func mergeRates(data *util.Monitor[api.Rates], new api.Rates) {
 
 // mergeRatesAfter blends new and existing rates, keeping existing rates after timestamp
 func mergeRatesAfter(data *util.Monitor[api.Rates], new api.Rates, now time.Time) {
+	new.Sort()
+
 	var newStart time.Time
 	if len(new) > 0 {
 		new.Sort()

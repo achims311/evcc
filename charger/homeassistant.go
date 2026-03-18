@@ -1,7 +1,7 @@
 package charger
 
-//go:generate go tool decorate -f decorateHomeAssistant -b *HomeAssistant -r api.Charger -t "api.Meter,CurrentPower,func() (float64, error)" -t "api.MeterEnergy,TotalEnergy,func() (float64, error)" -t "api.PhaseCurrents,Currents,func() (float64, float64, float64, error)" -t "api.PhaseVoltages,Voltages,func() (float64, float64, float64, error)"
-//  -t "api.CurrentGetter,GetMaxCurrent,func() (float64, error)"
+//go:generate go tool decorate -f decorateHomeAssistant -b *HomeAssistant -r api.Charger -t api.Meter,api.MeterEnergy,api.PhaseCurrents,api.PhaseVoltages
+//  -t api.CurrentGetter
 
 import (
 	"errors"
@@ -26,10 +26,11 @@ func init() {
 }
 
 // NewHomeAssistantFromConfig creates a HomeAssistant charger from generic config
-func NewHomeAssistantFromConfig(other map[string]interface{}) (api.Charger, error) {
-	cc := struct {
+func NewHomeAssistantFromConfig(other map[string]any) (api.Charger, error) {
+	var cc struct {
 		URI        string
-		Token      string
+		Token_     string   `mapstructure:"token"` // TODO deprecated
+		Home       string   // TODO deprecated
 		Status     string   // required - sensor for charge status
 		Enabled    string   // required - sensor for enabled state
 		Enable     string   // required - switch/input_boolean for enable/disable
@@ -38,7 +39,7 @@ func NewHomeAssistantFromConfig(other map[string]interface{}) (api.Charger, erro
 		Energy     string   // optional - energy sensor
 		Currents   []string // optional - current sensors for L1, L2, L3
 		Voltages   []string // optional - voltage sensors for L1, L2, L3
-	}{}
+	}
 
 	if err := util.DecodeOther(other, &cc); err != nil {
 		return nil, err
@@ -53,9 +54,13 @@ func NewHomeAssistantFromConfig(other map[string]interface{}) (api.Charger, erro
 	if cc.Enable == "" {
 		return nil, errors.New("missing enable switch entity")
 	}
+	if cc.MaxCurrent == "" {
+		return nil, errors.New("missing maxcurrent number entity")
+	}
 
 	log := util.NewLogger("ha-charger")
-	conn, err := homeassistant.NewConnection(log, cc.URI, cc.Token)
+
+	conn, err := homeassistant.NewConnection(log, cc.URI, cc.Home)
 	if err != nil {
 		return nil, err
 	}
@@ -79,26 +84,18 @@ func NewHomeAssistantFromConfig(other map[string]interface{}) (api.Charger, erro
 		energy = func() (float64, error) { return conn.GetFloatState(cc.Energy) }
 	}
 
-	// Set up phase currents (optional)
-	if len(cc.Currents) > 0 {
-		res, err := homeassistant.ValidatePhaseEntities(cc.Currents)
-		if err != nil {
-			return nil, fmt.Errorf("currents: %w", err)
-		}
-		currents = func() (float64, float64, float64, error) {
-			return conn.GetPhaseFloatStates(res)
-		}
+	// phase currents (optional)
+	if phases, err := homeassistant.ValidatePhaseEntities(cc.Currents); len(phases) > 0 {
+		currents = func() (float64, float64, float64, error) { return conn.GetPhaseFloatStates(phases) }
+	} else if err != nil {
+		return nil, fmt.Errorf("currents: %w", err)
 	}
 
-	// Set up phase voltages (optional)
-	if len(cc.Voltages) > 0 {
-		res, err := homeassistant.ValidatePhaseEntities(cc.Voltages)
-		if err != nil {
-			return nil, fmt.Errorf("voltages: %w", err)
-		}
-		voltages = func() (float64, float64, float64, error) {
-			return conn.GetPhaseFloatStates(res)
-		}
+	// phase voltages (optional)
+	if phases, err := homeassistant.ValidatePhaseEntities(cc.Voltages); len(phases) > 0 {
+		voltages = func() (float64, float64, float64, error) { return conn.GetPhaseFloatStates(phases) }
+	} else if err != nil {
+		return nil, fmt.Errorf("voltages: %w", err)
 	}
 
 	return decorateHomeAssistant(c, power, energy, currents, voltages), nil
@@ -123,5 +120,12 @@ func (c *HomeAssistant) Enable(enable bool) error {
 
 // MaxCurrent implements the api.Charger interface
 func (c *HomeAssistant) MaxCurrent(current int64) error {
-	return c.conn.CallNumberService(c.maxcurrent, float64(current))
+	return c.MaxCurrentMillis(float64(current))
+}
+
+var _ api.ChargerEx = (*HomeAssistant)(nil)
+
+// MaxCurrentMillis implements the api.ChargerEx interface
+func (c *HomeAssistant) MaxCurrentMillis(current float64) error {
+	return c.conn.CallNumberService(c.maxcurrent, current)
 }

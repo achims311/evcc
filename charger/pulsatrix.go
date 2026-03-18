@@ -96,7 +96,7 @@ func init() {
 }
 
 // NewPulsatrixFromConfig creates a pulsatrix charger from generic config
-func NewPulsatrixFromConfig(other map[string]interface{}) (api.Charger, error) {
+func NewPulsatrixFromConfig(other map[string]any) (api.Charger, error) {
 	var cc struct {
 		Host string
 	}
@@ -173,7 +173,7 @@ func (c *Pulsatrix) connect() error {
 
 // sync attempts synchronization with retry mechanism
 func (c *Pulsatrix) sync() error {
-	for i := 0; i < syncRetries; i++ {
+	for i := range syncRetries {
 		if err := c.Enable(false); err == nil {
 			return nil
 		}
@@ -328,14 +328,11 @@ func (c *Pulsatrix) parseMessage(messageType websocket.MessageType, message []by
 func (c *Pulsatrix) heartbeat(ctx context.Context) {
 	defer c.wg.Done()
 
-	ticker := time.NewTicker(heartbeatInterval)
-	defer ticker.Stop()
-
-	for {
+	for tick := time.NewTicker(heartbeatInterval); ; {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-tick.C:
 			enabled := atomic.LoadInt32(&c.enabled) != 0
 			if err := c.Enable(enabled); err != nil {
 				atomic.AddInt32(&c.consecutiveHeartbeatErrors, 1)

@@ -18,6 +18,18 @@ func (site *Site) batteryConfigured() bool {
 	return len(site.batteryMeters) > 0
 }
 
+func (site *Site) hasBatteryControl() bool {
+	for _, dev := range site.batteryMeters {
+		meter := dev.Instance()
+
+		if _, ok := meter.(api.BatteryController); ok {
+			return true
+		}
+	}
+
+	return false
+}
+
 // setBatteryMode sets the battery mode
 func (site *Site) setBatteryMode(batMode api.BatteryMode) {
 	site.batteryMode = batMode
@@ -148,7 +160,7 @@ func (site *Site) applyBatteryMode(mode api.BatteryMode) error {
 		// validate max soc
 		if fromToCharge && mode != api.BatteryHold {
 			ok, err := site.batteryMaxSocReached(dev)
-			if err != nil {
+			if err != nil && !errors.Is(err, api.ErrNotAvailable) {
 				return err
 			}
 
@@ -160,7 +172,9 @@ func (site *Site) applyBatteryMode(mode api.BatteryMode) error {
 		}
 
 		if mode != api.BatteryUnknown {
-			if err := batCtrl.SetBatteryMode(mode); err != nil && !errors.Is(err, api.ErrNotAvailable) {
+			if err := batCtrl.SetBatteryMode(mode); err == nil {
+				site.log.DEBUG.Printf("set battery %s mode: %s", deviceTitleOrName(dev), mode)
+			} else if !errors.Is(err, api.ErrNotAvailable) {
 				return err
 			}
 		}
